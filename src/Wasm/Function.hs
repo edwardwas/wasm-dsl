@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds            #-}
 {-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE GADTs                #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE PolyKinds            #-}
@@ -37,6 +38,16 @@ data ArgList ts where
     NoArgs :: ArgList '[]
     (:->:) :: NamedParam n t -> ArgList ts -> ArgList ('( n, t) ': ts)
 
+class SingArgList ts where
+  createArgList :: ArgList ts
+
+instance SingArgList '[] where
+  createArgList = NoArgs
+
+instance (KnownSymbol n, SingArgList ts, SingI t) =>
+         SingArgList ('( n, t) ': ts) where
+  createArgList = NamedParam :->: createArgList
+
 prettyArgList :: ArgList ts -> Doc ann
 prettyArgList NoArgs = mempty
 prettyArgList ((NamedParam :: NamedParam n t) :->: as) =
@@ -56,17 +67,18 @@ data Function inputs args res where
     Function
         :: Text
         -> Bool
-        -> ArgList inputs
         -> WasmInstruction (Append inputs args) res
         -> Function inputs args res
 
 deriving instance Show (Function inputs args res)
 
+type RecursiveFunction inputs args res = FunctionRef inputs (Append inputs args) res -> Function inputs args res
+
 prettyFunction ::
-       forall args res ann inputs. (MaybeConstraint SingI res, SingI res)
+       forall args res ann inputs. (MaybeConstraint SingI res, SingI res, SingArgList inputs)
     => Function inputs args res
     -> Doc ann
-prettyFunction (Function name export args body) =
+prettyFunction (Function name export body) =
     let nameDec =
             if export
                 then parens ("export" <+> dquotes (pretty name))
@@ -74,6 +86,6 @@ prettyFunction (Function name export args body) =
         funcName = "$" <> pretty name
      in parens $
         vsep
-            [ hsep ["func" , funcName , nameDec , prettyArgList args , (resultSection (Sing :: Sing res))]
+            [ hsep ["func" , funcName , nameDec , prettyArgList (createArgList :: ArgList inputs) , (resultSection (Sing :: Sing res))]
             , indent 2 $ prettyWasmInstruction body
             ]

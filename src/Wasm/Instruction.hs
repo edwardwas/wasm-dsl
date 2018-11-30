@@ -50,6 +50,15 @@ data CallFunction inputs args res where
     -> CallFunction ('( name, i) ': is) args res
     -> CallFunction is args res
 
+(-$-) ::
+     (KnownSymbol name, SingI i)
+  => CallFunction ('( name, i) ': is) args res
+  -> WasmInstruction args (Just i)
+  -> CallFunction is args res
+(-$-) cf i = ApplyInstruction i cf
+
+infixr 4 -$-
+
 prettyCallFunctionInputs :: CallFunction inputs args res -> [Doc ann]
 prettyCallFunctionInputs (CallFunction _) = []
 prettyCallFunctionInputs (ApplyInstruction wi cf) =

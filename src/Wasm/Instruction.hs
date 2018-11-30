@@ -88,8 +88,19 @@ type family Elem a as :: Constraint where
   Elem a (_ ': as) = (Elem a as)
 
 data WasmInstruction args t where
-  WasmConstant :: (Show (AssociatedHaskellType t), IsWasmType t) => WasmPrimitive t -> WasmInstruction args (Just t)
+  WasmConstant
+    :: (Show (AssociatedHaskellType t), IsWasmType t)
+    => WasmPrimitive t
+    -> WasmInstruction args (Just t)
   WasmAdd
+    :: WasmInstruction args (Just t)
+    -> WasmInstruction args (Just t)
+    -> WasmInstruction args (Just t)
+  WasmSub
+    :: WasmInstruction args (Just t)
+    -> WasmInstruction args (Just t)
+    -> WasmInstruction args (Just t)
+  WasmMul
     :: WasmInstruction args (Just t)
     -> WasmInstruction args (Just t)
     -> WasmInstruction args (Just t)
@@ -108,14 +119,26 @@ data WasmInstruction args t where
     -> WasmInstruction args t
     -> WasmInstruction args t
     -> WasmInstruction args t
-  WasmEq :: SingI t =>
-    WasmInstruction args (Just t)
+  WasmEq
+    :: SingI t
+    => WasmInstruction args (Just t)
     -> WasmInstruction args (Just t)
     -> WasmInstruction args (Just I32)
-
 instance (SingI t, KnownSymbol name, Elem '( name, t) args) =>
          IsLabel name (WasmInstruction args (Just t)) where
     fromLabel = GetLocal (NamedParam :: NamedParam name t)
+
+instance ( Show (AssociatedHaskellType t)
+         , IsWasmType t
+         , Num (AssociatedHaskellType t)
+         ) =>
+         Num (WasmInstruction args (Just t)) where
+  a + b = WasmAdd a b
+  a * b = WasmMul a b
+  a - b = WasmSub a b
+  fromInteger = WasmConstant . fromInteger
+  abs = undefined
+  signum = undefined
 
 deriving instance Show (WasmInstruction args t)
 
@@ -158,6 +181,20 @@ prettyWasmInstruction (WasmAdd (a :: WasmInstruction args (Just s)) b) =
   parens $
   vsep
     [ pretty (wasmTypePrefix (demote @s)) <> ".add"
+    , indent 2 $ prettyWasmInstruction a
+    , indent 2 $ prettyWasmInstruction b
+    ]
+prettyWasmInstruction (WasmMul (a :: WasmInstruction args (Just s)) b) =
+  parens $
+  vsep
+    [ pretty (wasmTypePrefix (demote @s)) <> ".mul"
+    , indent 2 $ prettyWasmInstruction a
+    , indent 2 $ prettyWasmInstruction b
+    ]
+prettyWasmInstruction (WasmSub (a :: WasmInstruction args (Just s)) b) =
+  parens $
+  vsep
+    [ pretty (wasmTypePrefix (demote @s)) <> ".sub"
     , indent 2 $ prettyWasmInstruction a
     , indent 2 $ prettyWasmInstruction b
     ]

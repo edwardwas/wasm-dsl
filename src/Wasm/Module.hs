@@ -19,7 +19,7 @@ import           Data.Text.Prettyprint.Doc
 data SomeFunction where
   SomeFunction
     :: (MaybeConstraint SingI res, SingI res)
-    => Function inputs '[] res
+    => Function inputs args res
     -> SomeFunction
 
 newtype Module a = Module (Writer [SomeFunction] a)
@@ -27,8 +27,8 @@ newtype Module a = Module (Writer [SomeFunction] a)
 
 moduleFunction ::
      (MaybeConstraint SingI res, SingI res)
-  => Function inputs '[] res
-  -> Module (FunctionRef inputs '[] res)
+  => Function inputs args res
+  -> Module (FunctionRef inputs as res)
 moduleFunction f@(Function name _ _ _) =
   Module (FunctionRef name <$ tell (pure $ SomeFunction f))
 

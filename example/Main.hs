@@ -12,21 +12,20 @@ import           Wasm.Instruction
 import           Wasm.Module
 import           Wasm.Types
 
-import           Control.Monad.Fix
-
-fibFunc :: RecursiveFunction '[ '( "n", F64)] '[] (Just F64)
+fibFunc :: RecursiveFunction '[ '( "n", 'F64)] '[] ('Just 'F64)
 fibFunc fRef =
   Function "fib" True $
   let child x =
         CallFunctionInstr $ CallFunction fRef -$- #n - x
-  in WasmIf (WasmEq @F64 #n 1 + WasmEq @F64 #n 2) 1 (child 1 + child 2)
+  in WasmIf (WasmEq @'F64 #n 1 + WasmEq @'F64 #n 2) 1 (child 1 + child 2)
 
 testModule :: Module ()
 testModule = do
   fibF <- moduleRecursiveFunction fibFunc
   _ <-
     moduleFunction $
-    Function @'[] "main" True $ (WasmConstant (-1 :: WasmPrimitive I64))
+    Function @'[] "main" True $ CallFunctionInstr $ CallFunction fibF -$- 10
   return ()
 
+main :: IO ()
 main = print $ prettyModule testModule

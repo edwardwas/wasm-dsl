@@ -30,10 +30,10 @@ wasmTypePrefix F32 = "f32"
 wasmTypePrefix F64 = "f64"
 
 data WasmPrimitive t where
-  PrimI32 :: Int -> WasmPrimitive I32
-  PrimI64 :: Integer -> WasmPrimitive I64
-  PrimF32 :: Float -> WasmPrimitive F32
-  PrimF64 :: Double -> WasmPrimitive F64
+  PrimI32 :: Int -> WasmPrimitive 'I32
+  PrimI64 :: Integer -> WasmPrimitive 'I64
+  PrimF32 :: Float -> WasmPrimitive 'F32
+  PrimF64 :: Double -> WasmPrimitive 'F64
 
 deriving instance Eq (WasmPrimitive t)
 deriving instance Show (WasmPrimitive t)
@@ -60,22 +60,22 @@ instance (Fractional (AssociatedHaskellType t), IsWasmType t) =>
   recip = promoteWasm . recip . lowerWasm
   a / b = promoteWasm (lowerWasm a / lowerWasm b)
 
-instance IsWasmType I32 where
-  type AssociatedHaskellType I32 = Int
+instance IsWasmType 'I32 where
+  type AssociatedHaskellType 'I32 = Int
   promoteWasm = PrimI32
   lowerWasm (PrimI32 n) = n
 
-instance IsWasmType I64 where
-  type AssociatedHaskellType I64 = Integer
+instance IsWasmType 'I64 where
+  type AssociatedHaskellType 'I64 = Integer
   promoteWasm = PrimI64
   lowerWasm (PrimI64 n) = n
 
-instance IsWasmType F32 where
-  type AssociatedHaskellType F32 = Float
+instance IsWasmType 'F32 where
+  type AssociatedHaskellType 'F32 = Float
   promoteWasm = PrimF32
   lowerWasm (PrimF32 n) = n
 
-instance IsWasmType F64 where
-  type AssociatedHaskellType F64 = Double
+instance IsWasmType 'F64 where
+  type AssociatedHaskellType 'F64 = Double
   promoteWasm = PrimF64
   lowerWasm (PrimF64 n) = n

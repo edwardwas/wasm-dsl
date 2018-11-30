@@ -17,7 +17,6 @@ import           Wasm.Instruction
 import           Wasm.Types
 
 import           Data.Singletons
-import           Data.Singletons.Prelude   hiding (Elem)
 import           Data.Text                 (Text)
 import           Data.Text.Prettyprint.Doc
 import           GHC.TypeLits

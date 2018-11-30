@@ -88,7 +88,7 @@ type family Elem a as :: Constraint where
   Elem a (_ ': as) = (Elem a as)
 
 data WasmInstruction args t where
-  WasmConstant :: WasmPrimitive t -> WasmInstruction args (Just t)
+  WasmConstant :: (Show (AssociatedHaskellType t), IsWasmType t) => WasmPrimitive t -> WasmInstruction args (Just t)
   WasmAdd
     :: WasmInstruction args (Just t)
     -> WasmInstruction args (Just t)
@@ -153,7 +153,7 @@ prettyWasmInstruction ::
 prettyWasmInstruction (WasmConstant (prim :: WasmPrimitive s)) =
   parens $
   pretty (wasmTypePrefix (demote @s)) <> ".const" <+>
-  withWasmPrimtive (pretty . show) prim
+  (pretty $ show $ lowerWasm prim)
 prettyWasmInstruction (WasmAdd (a :: WasmInstruction args (Just s)) b) =
   parens $
   vsep

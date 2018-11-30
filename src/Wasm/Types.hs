@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds            #-}
 {-# LANGUAGE EmptyCase            #-}
+{-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE GADTs                #-}
 {-# LANGUAGE InstanceSigs         #-}
 {-# LANGUAGE KindSignatures       #-}
@@ -37,43 +38,44 @@ data WasmPrimitive t where
 deriving instance Eq (WasmPrimitive t)
 deriving instance Show (WasmPrimitive t)
 
-class PromoteWasm a where
-  type family AssociatedWasmType a :: WasmType
-  promoteWasm :: a -> WasmPrimitive (AssociatedWasmType a)
+class SingI t =>
+      IsWasmType (t :: WasmType) where
+  type AssociatedHaskellType t :: *
+  promoteWasm :: AssociatedHaskellType t -> WasmPrimitive t
+  lowerWasm :: WasmPrimitive t -> AssociatedHaskellType t
 
-instance PromoteWasm Int where
-  type AssociatedWasmType Int = I32
+instance (Num (AssociatedHaskellType t), IsWasmType t) =>
+         Num (WasmPrimitive t) where
+  a + b = promoteWasm (lowerWasm a + lowerWasm b)
+  a * b = promoteWasm (lowerWasm a * lowerWasm b)
+  a - b = promoteWasm (lowerWasm a - lowerWasm b)
+  abs = promoteWasm . abs . lowerWasm
+  signum = promoteWasm . signum . lowerWasm
+  fromInteger = promoteWasm . fromInteger
+  negate = promoteWasm . negate . lowerWasm
+
+instance (Fractional (AssociatedHaskellType t), IsWasmType t) =>
+         Fractional (WasmPrimitive t) where
+  fromRational = promoteWasm . fromRational
+  recip = promoteWasm . recip . lowerWasm
+  a / b = promoteWasm (lowerWasm a / lowerWasm b)
+
+instance IsWasmType I32 where
+  type AssociatedHaskellType I32 = Int
   promoteWasm = PrimI32
+  lowerWasm (PrimI32 n) = n
 
-instance PromoteWasm Integer where
-  type AssociatedWasmType Integer = I64
+instance IsWasmType I64 where
+  type AssociatedHaskellType I64 = Integer
   promoteWasm = PrimI64
+  lowerWasm (PrimI64 n) = n
 
-instance PromoteWasm Float where
-  type AssociatedWasmType Float = F32
+instance IsWasmType F32 where
+  type AssociatedHaskellType F32 = Float
   promoteWasm = PrimF32
+  lowerWasm (PrimF32 n) = n
 
-instance PromoteWasm Double where
-  type AssociatedWasmType Double = F64
+instance IsWasmType F64 where
+  type AssociatedHaskellType F64 = Double
   promoteWasm = PrimF64
-
-withWasmPrimtive ::
-       (forall a. (Num a, Show a, PromoteWasm a) =>
-                      a -> b)
-    -> WasmPrimitive t
-    -> b
-withWasmPrimtive f (PrimI32 n) = f n
-withWasmPrimtive f (PrimI64 n) = f n
-withWasmPrimtive f (PrimF32 n) = f n
-withWasmPrimtive f (PrimF64 n) = f n
-
-withWasmPrimtive2 ::
-       (forall a. (Num a, Show a, PromoteWasm a, AssociatedWasmType a ~ t) =>
-                      a -> a -> b)
-    -> WasmPrimitive t
-    -> WasmPrimitive t
-    -> b
-withWasmPrimtive2 f (PrimI32 a) (PrimI32 b) = f a b
-withWasmPrimtive2 f (PrimI64 a) (PrimI64 b) = f a b
-withWasmPrimtive2 f (PrimF32 a) (PrimF32 b) = f a b
-withWasmPrimtive2 f (PrimF64 a) (PrimF64 b) = f a b
+  lowerWasm (PrimF64 n) = n

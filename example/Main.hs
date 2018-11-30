@@ -22,7 +22,7 @@ powFunction =
   WasmIf
     (WasmEq #n (WasmConstant $ PrimI32 1))
     #x
-    (WasmConstant $ PrimF32 3.2)
+    (WasmConstant 3.2)
 
 testModule :: Module ()
 testModule = do
@@ -32,8 +32,8 @@ testModule = do
     moduleFunction $
     Function "main" True NoArgs $
     CallFunctionInstr $
-    ApplyInstruction (WasmConstant $ PrimF32 2) $
-    ApplyInstruction (WasmConstant $ PrimI32 1) $ CallFunction powF
+    ApplyInstruction (WasmConstant 2) $
+    ApplyInstruction (WasmConstant 1) $ CallFunction powF
   return ()
 
 main = print $ prettyModule testModule

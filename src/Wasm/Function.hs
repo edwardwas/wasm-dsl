@@ -70,7 +70,8 @@ prettyFunction (Function name export args body) =
     let nameDec =
             if export
                 then parens ("export" <+> dquotes (pretty name))
-                else "$" <> pretty name
+                else mempty
+        funcName = "$" <> pretty name
         resultSection =
             case sing :: Sing res of
                 SNothing   -> mempty
@@ -80,6 +81,6 @@ prettyFunction (Function name export args body) =
                 SJust SF64 -> parens $ "result f64"
      in parens $
         vsep
-            [ "func" <+> nameDec <+> prettyArgList args <+> resultSection
+            [ "func" <+> funcName <+> nameDec <+> prettyArgList args <+> resultSection
             , indent 2 $ prettyWasmInstruction body
             ]

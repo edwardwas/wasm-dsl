@@ -27,6 +27,43 @@ import           GHC.TypeLits
 
 import           Wasm.Types
 
+data FunctionRef (inputs :: [(Symbol, WasmType)]) (args :: [(Symbol, WasmType)]) (res :: Maybe WasmType) where
+  FunctionRef :: Text -> FunctionRef inputs args res
+
+deriving instance Show (FunctionRef inputs args res)
+deriving instance Eq (FunctionRef inputs args res)
+
+data CallFunction inputs args res where
+  CallFunction :: FunctionRef inputs args res -> CallFunction inputs args res
+  ApplyInstruction
+    :: (KnownSymbol name, SingI i, (t ~ i))
+    => WasmInstruction args (Just t)
+    -> CallFunction ('( name, i) ': is) args res
+    -> CallFunction is args res
+
+prettyCallFunctionInputs :: CallFunction inputs args res -> [Doc ann]
+prettyCallFunctionInputs (CallFunction _) = []
+prettyCallFunctionInputs (ApplyInstruction wi cf) =
+  prettyWasmInstruction wi : prettyCallFunctionInputs cf
+
+callFunctionName :: CallFunction inputs args res -> Text
+callFunctionName (CallFunction (FunctionRef name)) = name
+callFunctionName (ApplyInstruction _ cf)           = callFunctionName cf
+
+prettyCallFunction :: CallFunction inputs args res -> Doc ann
+prettyCallFunction cf =
+  parens $
+  vsep
+    (("call $" <> pretty (callFunctionName cf)) :
+     map (indent 2) (prettyCallFunctionInputs cf))
+
+
+deriving instance Show (CallFunction inputs args res)
+
+instance SingI inputs => Eq (CallFunction inputs args res) where
+  CallFunction fr1 == CallFunction fr2 = fr1 == fr2
+  _ == _ = undefined
+
 data NamedParam (name :: Symbol) (t :: WasmType) where
     NamedParam :: (KnownSymbol name, SingI t) => NamedParam name t
 
@@ -56,6 +93,7 @@ data WasmInstruction args t where
         :: (KnownSymbol name, Elem '(name,t) args, SingI t)
         => NamedParam name t
         -> WasmInstruction args (Just t)
+    CallFunctionInstr :: CallFunction '[] args res -> WasmInstruction args res
 
 instance (SingI t, KnownSymbol name, Elem '( name, t) args) =>
          IsLabel name (WasmInstruction args (Just t)) where
@@ -86,24 +124,25 @@ type family MaybeConstraint c mx :: Constraint where
     MaybeConstraint _ Nothing = ()
 
 prettyWasmInstruction ::
-       MaybeConstraint SingI t => WasmInstruction args t -> Doc ann
+     MaybeConstraint SingI t => WasmInstruction args t -> Doc ann
 prettyWasmInstruction (WasmConstant (prim :: WasmPrimitive s)) =
-    parens $
-    pretty (wasmTypePrefix (demote @s)) <> ".const" <+>
-    withWasmPrimtive (pretty . show) prim
+  parens $
+  pretty (wasmTypePrefix (demote @s)) <> ".const" <+>
+  withWasmPrimtive (pretty . show) prim
 prettyWasmInstruction (WasmAdd (a :: WasmInstruction args (Just s)) b) =
-    parens $
-    vsep
-        [ pretty (wasmTypePrefix (demote @s)) <> ".add"
-        , indent 2 $ prettyWasmInstruction a
-        , indent 2 $ prettyWasmInstruction b
-        ]
+  parens $
+  vsep
+    [ pretty (wasmTypePrefix (demote @s)) <> ".add"
+    , indent 2 $ prettyWasmInstruction a
+    , indent 2 $ prettyWasmInstruction b
+    ]
 prettyWasmInstruction (WasmStore addr (val :: WasmInstruction args (Just s))) =
-    parens $
-    vsep
-        [ pretty (wasmTypePrefix (demote @s)) <> ".store"
-        , indent 2 $ prettyWasmInstruction addr
-        , indent 2 $ prettyWasmInstruction val
-        ]
+  parens $
+  vsep
+    [ pretty (wasmTypePrefix (demote @s)) <> ".store"
+    , indent 2 $ prettyWasmInstruction addr
+    , indent 2 $ prettyWasmInstruction val
+    ]
 prettyWasmInstruction (GetLocal (_ :: NamedParam name s)) =
-    parens $ "get_local $" <> pretty (symbolVal (Proxy @name))
+  parens $ "get_local $" <> pretty (symbolVal (Proxy @name))
+prettyWasmInstruction (CallFunctionInstr cf) = prettyCallFunction cf

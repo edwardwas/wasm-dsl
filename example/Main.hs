@@ -1,7 +1,8 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE OverloadedLabels  #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE OverloadedLabels    #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 
 module Main where
 
@@ -10,24 +11,19 @@ import           Wasm.Instruction
 import           Wasm.Module
 import           Wasm.Types
 
-testInstr :: WasmInstruction '[ '( "x", F32)] Nothing
-testInstr =
-    WasmStore (WasmConstant $ PrimI32 0) $
-    WasmAdd (WasmConstant $ PrimF32 10) $ #x
+doubleFunction :: Function '[ '( "x", F32)] '[] (Just F32)
+doubleFunction =
+  Function "double" True (NamedParam :->: NoArgs) $
+  WasmAdd (GetLocal #x) (GetLocal #x)
 
-testFunc :: Function '[ '( "x", F32)] '[] Nothing
-testFunc = Function "example" True (NamedParam @"x" @F32 :->: NoArgs) testInstr
-
-doubleFunc :: Function '[ '( "x", I32)] '[] (Just I32)
-doubleFunc =
-    Function "double" False (NamedParam @"x" @I32 :->: NoArgs) $ WasmAdd #x #x
-
-testModule =
-  Module
-    [ SomeFunction testFunc
-    , SomeFunction doubleFunc
-    , SomeFunction $ Function "main" True NoArgs $ WasmConstant $ PrimF32 4
-    ]
-
+testModule :: Module ()
+testModule = do
+  doubleF <- moduleFunction doubleFunction
+  _ <-
+    moduleFunction $
+    Function "main" True NoArgs $
+    CallFunctionInstr $
+    ApplyInstruction (WasmConstant $ PrimF32 22.3) $ CallFunction doubleF
+  return ()
 
 main = print $ prettyModule testModule

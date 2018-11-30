@@ -1,33 +1,43 @@
-{-# LANGUAGE DataKinds          #-}
-{-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 
 module Wasm.Module where
 
 import           Wasm.Function
 import           Wasm.Instruction
 
+import           Control.Monad.Fix
+import           Control.Monad.Writer
 import           Data.Singletons
 import           Data.Text.Prettyprint.Doc
 
-data SomeFunction args where
-    SomeFunction
-        :: (SingI res, MaybeConstraint SingI res)
-        => Function inputs args res
-        -> SomeFunction args
+data SomeFunction where
+  SomeFunction
+    :: (MaybeConstraint SingI res, SingI res)
+    => Function inputs '[] res
+    -> SomeFunction
 
-deriving instance Show (SomeFunction args)
+newtype Module a = Module (Writer [SomeFunction] a)
+  deriving (Functor,Applicative,Monad,MonadFix)
 
-data Module = Module {funcions :: [SomeFunction '[]]}
-  deriving (Show)
+moduleFunction ::
+     (MaybeConstraint SingI res, SingI res)
+  => Function inputs '[] res
+  -> Module (FunctionRef inputs '[] res)
+moduleFunction f@(Function name _ _ _) =
+  Module (FunctionRef name <$ tell (pure $ SomeFunction f))
 
-prettyModule :: Module -> Doc ann
-prettyModule (Module functions) =
-    parens $
-    vsep $
-    "module" :
-    indent 2 "(memory $0 1)" :
-    map (\(SomeFunction f) -> indent 2 $ prettyFunction f) functions
+prettyModule :: Module () -> Doc ann
+prettyModule (Module act) =
+  let helper funcs =
+        parens $
+        vsep
+          ("module" :
+           indent 2 (parens $ "memory $0 1") :
+           map (\(SomeFunction f) -> indent 2 $ prettyFunction f) funcs)
+  in helper $ execWriter act

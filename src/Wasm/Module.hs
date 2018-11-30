@@ -29,4 +29,5 @@ prettyModule (Module functions) =
     parens $
     vsep $
     "module" :
+    indent 2 "(memory $0 1)" :
     map (\(SomeFunction f) -> indent 2 $ prettyFunction f) functions

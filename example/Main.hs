@@ -22,7 +22,12 @@ doubleFunc :: Function '[ '( "x", I32)] '[] (Just I32)
 doubleFunc =
     Function "double" False (NamedParam @"x" @I32 :->: NoArgs) $ WasmAdd #x #x
 
-testModule = Module [SomeFunction testFunc, SomeFunction doubleFunc]
+testModule =
+  Module
+    [ SomeFunction testFunc
+    , SomeFunction doubleFunc
+    , SomeFunction $ Function "main" True NoArgs $ WasmConstant $ PrimF32 4
+    ]
 
 
 main = print $ prettyModule testModule

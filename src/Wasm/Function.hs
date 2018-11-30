@@ -72,15 +72,8 @@ prettyFunction (Function name export args body) =
                 then parens ("export" <+> dquotes (pretty name))
                 else mempty
         funcName = "$" <> pretty name
-        resultSection =
-            case sing :: Sing res of
-                SNothing   -> mempty
-                SJust SI32 -> parens $ "result i32"
-                SJust SI64 -> parens $ "result i64"
-                SJust SF32 -> parens $ "result f32"
-                SJust SF64 -> parens $ "result f64"
      in parens $
         vsep
-            [ "func" <+> funcName <+> nameDec <+> prettyArgList args <+> resultSection
+            [ hsep ["func" , funcName , nameDec , prettyArgList args , (resultSection (Sing :: Sing res))]
             , indent 2 $ prettyWasmInstruction body
             ]

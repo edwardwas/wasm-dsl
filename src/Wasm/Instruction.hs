@@ -27,6 +27,15 @@ import           GHC.TypeLits
 
 import           Wasm.Types
 
+resultSection :: forall res ann . Sing (res :: Maybe WasmType) -> Doc ann
+resultSection sing =
+    case sing :: Sing res of
+        SNothing   -> mempty
+        SJust SI32 -> parens $ "result i32"
+        SJust SI64 -> parens $ "result i64"
+        SJust SF32 -> parens $ "result f32"
+        SJust SF64 -> parens $ "result f64"
+
 data FunctionRef (inputs :: [(Symbol, WasmType)]) (args :: [(Symbol, WasmType)]) (res :: Maybe WasmType) where
   FunctionRef :: Text -> FunctionRef inputs args res
 
@@ -55,7 +64,7 @@ prettyCallFunction cf =
   parens $
   vsep
     (("call $" <> pretty (callFunctionName cf)) :
-     map (indent 2) (prettyCallFunctionInputs cf))
+     map (indent 2) (reverse $ prettyCallFunctionInputs cf))
 
 
 deriving instance Show (CallFunction inputs args res)
@@ -79,21 +88,30 @@ type family Elem a as :: Constraint where
   Elem a (_ ': as) = (Elem a as)
 
 data WasmInstruction args t where
-    WasmConstant :: WasmPrimitive t -> WasmInstruction args (Just t)
-    WasmAdd
-        :: WasmInstruction args (Just t)
-        -> WasmInstruction args (Just t)
-        -> WasmInstruction args (Just t)
-    WasmStore
-        :: SingI t
-        => WasmInstruction args (Just I32)
-        -> WasmInstruction args (Just t)
-        -> WasmInstruction args Nothing
-    GetLocal
-        :: (KnownSymbol name, Elem '(name,t) args, SingI t)
-        => NamedParam name t
-        -> WasmInstruction args (Just t)
-    CallFunctionInstr :: CallFunction '[] args res -> WasmInstruction args res
+  WasmConstant :: WasmPrimitive t -> WasmInstruction args (Just t)
+  WasmAdd
+    :: WasmInstruction args (Just t)
+    -> WasmInstruction args (Just t)
+    -> WasmInstruction args (Just t)
+  WasmStore
+    :: SingI t
+    => WasmInstruction args (Just I32)
+    -> WasmInstruction args (Just t)
+    -> WasmInstruction args Nothing
+  GetLocal
+    :: (KnownSymbol name, Elem '( name, t) args, SingI t)
+    => NamedParam name t
+    -> WasmInstruction args (Just t)
+  CallFunctionInstr :: CallFunction '[] args res -> WasmInstruction args res
+  WasmIf
+    :: WasmInstruction args (Just I32)
+    -> WasmInstruction args t
+    -> WasmInstruction args t
+    -> WasmInstruction args t
+  WasmEq :: SingI t =>
+    WasmInstruction args (Just t)
+    -> WasmInstruction args (Just t)
+    -> WasmInstruction args (Just I32)
 
 instance (SingI t, KnownSymbol name, Elem '( name, t) args) =>
          IsLabel name (WasmInstruction args (Just t)) where
@@ -117,6 +135,11 @@ instance Eq (WasmInstruction args t) where
                     Proved _    -> True
                     Disproved _ -> False
             Disproved _ -> False
+    WasmIf p1 a1 b1 == WasmIf p2 a2 b2 = p1 == p2 && a1 == a2 && b1 == b2
+    WasmEq (a :: WasmInstruction args (Just x)) b == WasmEq (c :: WasmInstruction args (Just y)) d =
+      case (sing :: Sing x) %~ (sing :: Sing y) of
+        Proved ref -> case apply (Refl @Just) ref of
+            Refl -> a == c && b == d
     _ == _ = False
 
 type family MaybeConstraint c mx :: Constraint where
@@ -124,7 +147,9 @@ type family MaybeConstraint c mx :: Constraint where
     MaybeConstraint _ Nothing = ()
 
 prettyWasmInstruction ::
-     MaybeConstraint SingI t => WasmInstruction args t -> Doc ann
+     forall t args ann. (SingI t, MaybeConstraint SingI t)
+  => WasmInstruction args t
+  -> Doc ann
 prettyWasmInstruction (WasmConstant (prim :: WasmPrimitive s)) =
   parens $
   pretty (wasmTypePrefix (demote @s)) <> ".const" <+>
@@ -146,3 +171,18 @@ prettyWasmInstruction (WasmStore addr (val :: WasmInstruction args (Just s))) =
 prettyWasmInstruction (GetLocal (_ :: NamedParam name s)) =
   parens $ "get_local $" <> pretty (symbolVal (Proxy @name))
 prettyWasmInstruction (CallFunctionInstr cf) = prettyCallFunction cf
+prettyWasmInstruction (WasmIf pred a b) =
+  parens $
+  vsep
+    [ "if" <+> resultSection (Sing :: Sing t)
+    , indent 2 $ prettyWasmInstruction pred
+    , indent 2 $ parens $ vsep ["then", indent 2 $ prettyWasmInstruction a]
+    , indent 2 $ parens $ vsep ["else", indent 2 $ prettyWasmInstruction b]
+    ]
+prettyWasmInstruction (WasmEq (a ::WasmInstruction args (Just s)) b) =
+  parens $
+  vsep
+    [ pretty (wasmTypePrefix (demote @s)) <> ".eq"
+    , indent 2 $ prettyWasmInstruction a
+    , indent 2 $ prettyWasmInstruction b
+    ]

@@ -14,12 +14,11 @@
 
 module Wasm.Instruction where
 
+import           Data.Maybe                (fromMaybe)
 import           Data.Singletons
-import           Data.Singletons.Decide
 import           Data.Singletons.Prelude   hiding (Elem)
 import           Data.Text                 (Text)
 import           Data.Text.Prettyprint.Doc
-import           Data.Type.Equality
 import           GHC.Exts
 import           GHC.OverloadedLabels
 import           GHC.TypeLits
@@ -36,7 +35,7 @@ resultSection s =
         SJust SF64 -> parens $ "result f64"
 
 data FunctionRef (inputs :: [(Symbol, WasmType)]) (args :: [(Symbol, WasmType)]) (res :: Maybe WasmType) where
-  FunctionRef :: Text -> FunctionRef inputs args res
+    FunctionRef :: Text -> FunctionRef inputs args res
 
 deriving instance Show (FunctionRef inputs args res)
 deriving instance Eq (FunctionRef inputs args res)
@@ -96,42 +95,76 @@ type family Elem a as :: Constraint where
   Elem a (_ ': as) = (Elem a as)
 
 data WasmInstruction args t where
-  WasmConstant
-    :: (Show (AssociatedHaskellType t), IsWasmType t)
-    => WasmPrimitive t
-    -> WasmInstruction args ('Just t)
-  WasmAdd
-    :: WasmInstruction args ('Just t)
-    -> WasmInstruction args ('Just t)
-    -> WasmInstruction args ('Just t)
-  WasmSub
-    :: WasmInstruction args ('Just t)
-    -> WasmInstruction args ('Just t)
-    -> WasmInstruction args ('Just t)
-  WasmMul
-    :: WasmInstruction args ('Just t)
-    -> WasmInstruction args ('Just t)
-    -> WasmInstruction args ('Just t)
-  WasmStore
-    :: SingI t
-    => WasmInstruction args ('Just 'I32)
-    -> WasmInstruction args ('Just t)
-    -> WasmInstruction args 'Nothing
-  GetLocal
-    :: (KnownSymbol name, Elem '( name, t) args, SingI t)
-    => NamedParam name t
-    -> WasmInstruction args ('Just t)
-  CallFunctionInstr :: CallFunction '[] args res -> WasmInstruction args res
-  WasmIf
-    :: WasmInstruction args ('Just 'I32)
-    -> WasmInstruction args t
-    -> WasmInstruction args t
-    -> WasmInstruction args t
-  WasmEq
-    :: SingI t
-    => WasmInstruction args ('Just t)
-    -> WasmInstruction args ('Just t)
-    -> WasmInstruction args ('Just 'I32)
+    WasmConstant
+        :: (Show (AssociatedHaskellType t), IsWasmType t)
+        => WasmPrimitive t
+        -> WasmInstruction args ('Just t)
+    WasmAdd
+        :: WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+    WasmSub
+        :: WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+    WasmMul
+        :: WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+    WasmStore
+        :: SingI t
+        => WasmInstruction args ('Just 'I32)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args 'Nothing
+    GetLocal
+        :: (KnownSymbol name, Elem '( name, t) args, SingI t)
+        => NamedParam name t
+        -> WasmInstruction args ('Just t)
+    SetLocal
+        :: (KnownSymbol name, Elem '( name,t) args, SingI t)
+        => NamedParam name t
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args 'Nothing
+    TeeLocal
+        :: (KnownSymbol name, Elem '( name,t) args, SingI t)
+        => NamedParam name t
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+    CallFunctionInstr :: CallFunction '[] args res -> WasmInstruction args res
+    WasmIf
+        :: WasmInstruction args ('Just 'I32)
+        -> WasmInstruction args t
+        -> WasmInstruction args t
+        -> WasmInstruction args t
+    WasmEq
+        :: SingI t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
+    WasmBlock
+        :: Maybe Text
+        -> [WasmInstruction args 'Nothing]
+        -> WasmInstruction args 'Nothing
+    WasmLessThanOrEqal
+        :: IsFloatWasmType t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
+    WasmLessThan
+        :: IsFloatWasmType t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
+    WasmGreaterThanOrEqal
+        :: IsFloatWasmType t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
+    WasmGreaterThan
+        :: IsFloatWasmType t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
 
 instance (SingI t, KnownSymbol name, Elem '( name, t) args) =>
          IsLabel name (WasmInstruction args ('Just t)) where
@@ -152,28 +185,7 @@ instance ( Show (AssociatedHaskellType t)
 deriving instance Show (WasmInstruction args t)
 
 instance Eq (WasmInstruction args t) where
-    WasmConstant a == WasmConstant b = a == b
-    WasmAdd a b == WasmAdd c d = a == c && b == d
-    WasmStore a (b :: WasmInstruction args ('Just x)) == WasmStore c (d :: WasmInstruction args ('Just y)) =
-        case (sing :: Sing x) %~ (sing :: Sing y) of
-            Proved ref ->
-                case apply (Refl @'Just) ref of
-                    Refl -> b == d && a == c
-            Disproved _ -> False
-    GetLocal (_ :: NamedParam name1 t1) == GetLocal (_ :: NamedParam name2 t2) =
-        case (sing :: Sing name1) %~ (sing :: Sing name2) of
-            Proved _ ->
-                case (sing :: Sing t1) %~ (sing :: Sing t2) of
-                    Proved _    -> True
-                    Disproved _ -> False
-            Disproved _ -> False
-    WasmIf p1 a1 b1 == WasmIf p2 a2 b2 = p1 == p2 && a1 == a2 && b1 == b2
-    WasmEq (a :: WasmInstruction args ('Just x)) b == WasmEq (c :: WasmInstruction args ('Just y)) d =
-      case (sing :: Sing x) %~ (sing :: Sing y) of
-        Proved ref -> case apply (Refl @'Just) ref of
-            Refl -> a == c && b == d
-        Disproved _ -> False
-    _ == _ = False
+    a == b = show a == show b
 
 type family MaybeConstraint c mx :: Constraint where
     MaybeConstraint c ('Just x) = (c x)
@@ -217,6 +229,18 @@ prettyWasmInstruction (WasmStore addr (val :: WasmInstruction args ('Just s))) =
     ]
 prettyWasmInstruction (GetLocal (_ :: NamedParam name s)) =
   parens $ "get_local $" <> pretty (symbolVal (Proxy @name))
+prettyWasmInstruction (SetLocal (_ :: NamedParam name s) arg) =
+    parens $
+    vsep
+        [ "set_local $" <> pretty (symbolVal (Proxy @name))
+        , indent 2 $ parens $ prettyWasmInstruction arg
+        ]
+prettyWasmInstruction (TeeLocal (_ :: NamedParam name s) arg) =
+    parens $
+    vsep
+        [ "tee_local $" <> pretty (symbolVal (Proxy @name))
+        , indent 2 $ parens $ prettyWasmInstruction arg
+        ]
 prettyWasmInstruction (CallFunctionInstr cf) = prettyCallFunction cf
 prettyWasmInstruction (WasmIf predicate a b) =
   parens $
@@ -233,3 +257,39 @@ prettyWasmInstruction (WasmEq (a ::WasmInstruction args ('Just s)) b) =
     , indent 2 $ prettyWasmInstruction a
     , indent 2 $ prettyWasmInstruction b
     ]
+prettyWasmInstruction (WasmBlock mName args) =
+    parens $
+    vsep
+        (("block" <+> pretty (fromMaybe "void" mName)) :
+         map (indent 2 . prettyWasmInstruction) args)
+prettyWasmInstruction (WasmLessThanOrEqal (a :: WasmInstruction args ('Just s)) b) =
+    parens $
+    vsep
+        [ pretty (wasmTypePrefix (demote @s)) <> ".le"
+        , indent 2 $ prettyWasmInstruction a
+        , indent 2 $ prettyWasmInstruction b
+        ]
+prettyWasmInstruction (WasmLessThan (a :: WasmInstruction args ('Just s)) b) =
+    parens $
+    vsep
+        [ pretty (wasmTypePrefix (demote @s)) <> ".lt"
+        , indent 2 $ prettyWasmInstruction a
+        , indent 2 $ prettyWasmInstruction b
+        ]
+prettyWasmInstruction (WasmGreaterThanOrEqal (a :: WasmInstruction args ('Just s)) b) =
+    parens $
+    vsep
+        [ pretty (wasmTypePrefix (demote @s)) <> ".ge"
+        , indent 2 $ prettyWasmInstruction a
+        , indent 2 $ prettyWasmInstruction b
+        ]
+prettyWasmInstruction (WasmGreaterThan (a :: WasmInstruction args ('Just s)) b) =
+    parens $
+    vsep
+        [ pretty (wasmTypePrefix (demote @s)) <> ".gt"
+        , indent 2 $ prettyWasmInstruction a
+        , indent 2 $ prettyWasmInstruction b
+        ]
+
+instance Semigroup (WasmInstruction args 'Nothing) where
+    a <> b = WasmBlock Nothing [a, b]

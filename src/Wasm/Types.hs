@@ -44,6 +44,10 @@ class SingI t =>
   promoteWasm :: AssociatedHaskellType t -> WasmPrimitive t
   lowerWasm :: WasmPrimitive t -> AssociatedHaskellType t
 
+class IsWasmType t => IsFloatWasmType t
+instance IsFloatWasmType 'F32
+instance IsFloatWasmType 'F64
+
 instance (Num (AssociatedHaskellType t), IsWasmType t) =>
          Num (WasmPrimitive t) where
   a + b = promoteWasm (lowerWasm a + lowerWasm b)

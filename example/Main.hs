@@ -21,11 +21,12 @@ fibFunc fRef =
 
 testModule :: Module ()
 testModule = do
-  fibF <- moduleRecursiveFunction fibFunc
-  _ <-
-    moduleFunction $
-    Function @'[] "main" True $ CallFunctionInstr $ CallFunction fibF -$- 10
-  return ()
+    fibF <- moduleRecursiveFunction fibFunc
+    _ <-
+        moduleFunction $
+        Function @'[] "main" True $
+        WasmGreaterThan 100 $ CallFunctionInstr $ CallFunction fibF -$- 10
+    return ()
 
 main :: IO ()
 main = print $ prettyModule testModule

@@ -145,7 +145,7 @@ data WasmInstruction args t where
         :: Maybe Text
         -> [WasmInstruction args 'Nothing]
         -> WasmInstruction args 'Nothing
-    WasmLessThanOrEqal
+    WasmLessThanOrEqual
         :: IsFloatWasmType t
         => WasmInstruction args ('Just t)
         -> WasmInstruction args ('Just t)
@@ -155,13 +155,53 @@ data WasmInstruction args t where
         => WasmInstruction args ('Just t)
         -> WasmInstruction args ('Just t)
         -> WasmInstruction args ('Just 'I32)
-    WasmGreaterThanOrEqal
+    WasmGreaterThanOrEqual
         :: IsFloatWasmType t
         => WasmInstruction args ('Just t)
         -> WasmInstruction args ('Just t)
         -> WasmInstruction args ('Just 'I32)
     WasmGreaterThan
         :: IsFloatWasmType t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
+    WasmLessThanOrEqualSigned
+        :: IsIntWasmType t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
+    WasmLessThanSigned
+        :: IsIntWasmType t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
+    WasmGreaterThanOrEqualSigned
+        :: IsIntWasmType t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
+    WasmGreaterThanSigned
+        :: IsIntWasmType t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
+    WasmLessThanOrEqualUnsigned
+        :: IsIntWasmType t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
+    WasmLessThanUnsigned
+        :: IsIntWasmType t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
+    WasmGreaterThanOrEqualUnsigned
+        :: IsIntWasmType t
+        => WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just t)
+        -> WasmInstruction args ('Just 'I32)
+    WasmGreaterThanUnsigned
+        :: IsIntWasmType t
         => WasmInstruction args ('Just t)
         -> WasmInstruction args ('Just t)
         -> WasmInstruction args ('Just 'I32)
@@ -191,6 +231,21 @@ type family MaybeConstraint c mx :: Constraint where
     MaybeConstraint c ('Just x) = (c x)
     MaybeConstraint _ 'Nothing = ()
 
+wasmOperator ::
+       forall t args ann. (SingI t)
+    => Text
+    -> WasmInstruction args ('Just t)
+    -> WasmInstruction args ('Just t)
+    -> Doc ann
+wasmOperator name a b =
+    parens $
+    vsep
+        [ pretty (wasmTypePrefix (demote @t)) <> "." <>
+          pretty name
+        , indent 2 $ prettyWasmInstruction a
+        , indent 2 $ prettyWasmInstruction b
+        ]
+
 prettyWasmInstruction ::
      forall t args ann. (SingI t, MaybeConstraint SingI t)
   => WasmInstruction args t
@@ -199,27 +254,9 @@ prettyWasmInstruction (WasmConstant (prim :: WasmPrimitive s)) =
   parens $
   pretty (wasmTypePrefix (demote @s)) <> ".const" <+>
   (pretty $ show $ lowerWasm prim)
-prettyWasmInstruction (WasmAdd (a :: WasmInstruction args ('Just s)) b) =
-  parens $
-  vsep
-    [ pretty (wasmTypePrefix (demote @s)) <> ".add"
-    , indent 2 $ prettyWasmInstruction a
-    , indent 2 $ prettyWasmInstruction b
-    ]
-prettyWasmInstruction (WasmMul (a :: WasmInstruction args ('Just s)) b) =
-  parens $
-  vsep
-    [ pretty (wasmTypePrefix (demote @s)) <> ".mul"
-    , indent 2 $ prettyWasmInstruction a
-    , indent 2 $ prettyWasmInstruction b
-    ]
-prettyWasmInstruction (WasmSub (a :: WasmInstruction args ('Just s)) b) =
-  parens $
-  vsep
-    [ pretty (wasmTypePrefix (demote @s)) <> ".sub"
-    , indent 2 $ prettyWasmInstruction a
-    , indent 2 $ prettyWasmInstruction b
-    ]
+prettyWasmInstruction (WasmAdd a b) = wasmOperator "add" a b
+prettyWasmInstruction (WasmMul a b) = wasmOperator "mul" a b
+prettyWasmInstruction (WasmSub a b) = wasmOperator "sub" a b
 prettyWasmInstruction (WasmStore addr (val :: WasmInstruction args ('Just s))) =
   parens $
   vsep
@@ -250,46 +287,24 @@ prettyWasmInstruction (WasmIf predicate a b) =
     , indent 2 $ parens $ vsep ["then", indent 2 $ prettyWasmInstruction a]
     , indent 2 $ parens $ vsep ["else", indent 2 $ prettyWasmInstruction b]
     ]
-prettyWasmInstruction (WasmEq (a ::WasmInstruction args ('Just s)) b) =
-  parens $
-  vsep
-    [ pretty (wasmTypePrefix (demote @s)) <> ".eq"
-    , indent 2 $ prettyWasmInstruction a
-    , indent 2 $ prettyWasmInstruction b
-    ]
 prettyWasmInstruction (WasmBlock mName args) =
     parens $
     vsep
         (("block" <+> pretty (fromMaybe "void" mName)) :
          map (indent 2 . prettyWasmInstruction) args)
-prettyWasmInstruction (WasmLessThanOrEqal (a :: WasmInstruction args ('Just s)) b) =
-    parens $
-    vsep
-        [ pretty (wasmTypePrefix (demote @s)) <> ".le"
-        , indent 2 $ prettyWasmInstruction a
-        , indent 2 $ prettyWasmInstruction b
-        ]
-prettyWasmInstruction (WasmLessThan (a :: WasmInstruction args ('Just s)) b) =
-    parens $
-    vsep
-        [ pretty (wasmTypePrefix (demote @s)) <> ".lt"
-        , indent 2 $ prettyWasmInstruction a
-        , indent 2 $ prettyWasmInstruction b
-        ]
-prettyWasmInstruction (WasmGreaterThanOrEqal (a :: WasmInstruction args ('Just s)) b) =
-    parens $
-    vsep
-        [ pretty (wasmTypePrefix (demote @s)) <> ".ge"
-        , indent 2 $ prettyWasmInstruction a
-        , indent 2 $ prettyWasmInstruction b
-        ]
-prettyWasmInstruction (WasmGreaterThan (a :: WasmInstruction args ('Just s)) b) =
-    parens $
-    vsep
-        [ pretty (wasmTypePrefix (demote @s)) <> ".gt"
-        , indent 2 $ prettyWasmInstruction a
-        , indent 2 $ prettyWasmInstruction b
-        ]
+prettyWasmInstruction (WasmEq a b) =  wasmOperator "eq" a b
+prettyWasmInstruction (WasmLessThanOrEqual a b) =  wasmOperator "le" a b
+prettyWasmInstruction (WasmLessThan a b) =  wasmOperator "lt" a b
+prettyWasmInstruction (WasmGreaterThanOrEqual a b) =  wasmOperator "ge" a b
+prettyWasmInstruction (WasmGreaterThan a b) =  wasmOperator "gt" a b
+prettyWasmInstruction (WasmLessThanOrEqualSigned a b) =  wasmOperator "le_s" a b
+prettyWasmInstruction (WasmLessThanSigned a b) =  wasmOperator "lt_s" a b
+prettyWasmInstruction (WasmGreaterThanOrEqualSigned a b) =  wasmOperator "ge_s" a b
+prettyWasmInstruction (WasmGreaterThanSigned a b) =  wasmOperator "gt_s" a b
+prettyWasmInstruction (WasmLessThanOrEqualUnsigned a b) =  wasmOperator "le_u" a b
+prettyWasmInstruction (WasmLessThanUnsigned a b) =  wasmOperator "lt_u" a b
+prettyWasmInstruction (WasmGreaterThanOrEqualUnsigned a b) =  wasmOperator "ge_u" a b
+prettyWasmInstruction (WasmGreaterThanUnsigned a b) =  wasmOperator "gt_u" a b
 
 instance Semigroup (WasmInstruction args 'Nothing) where
     a <> b = WasmBlock Nothing [a, b]

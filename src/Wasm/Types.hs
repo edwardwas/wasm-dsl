@@ -48,6 +48,10 @@ class IsWasmType t => IsFloatWasmType t
 instance IsFloatWasmType 'F32
 instance IsFloatWasmType 'F64
 
+class IsWasmType t => IsIntWasmType t
+instance IsIntWasmType 'I32
+instance IsIntWasmType 'I64
+
 instance (Num (AssociatedHaskellType t), IsWasmType t) =>
          Num (WasmPrimitive t) where
   a + b = promoteWasm (lowerWasm a + lowerWasm b)

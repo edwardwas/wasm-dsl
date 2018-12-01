@@ -306,8 +306,23 @@ prettyWasmInstruction (WasmLessThanUnsigned a b) =  wasmOperator "lt_u" a b
 prettyWasmInstruction (WasmGreaterThanOrEqualUnsigned a b) =  wasmOperator "ge_u" a b
 prettyWasmInstruction (WasmGreaterThanUnsigned a b) =  wasmOperator "gt_u" a b
 
+flatternBlocks :: WasmInstruction args res -> WasmInstruction args res
+flatternBlocks (WasmBlock na as) =
+    let helper (WasmBlock nb bs)
+          | nb == na = bs
+          | otherwise = [WasmBlock nb bs]
+        helper instr = [instr]
+     in WasmBlock na (as >>= helper)
+flatternBlocks instr = instr
+
+appendHelper ::
+       WasmInstruction args 'Nothing
+    -> WasmInstruction args 'Nothing
+    -> WasmInstruction args 'Nothing
+appendHelper (WasmBlock na as) (WasmBlock nb bs)
+    | na == nb = WasmBlock na (as <> bs)
+    | otherwise = WasmBlock Nothing [WasmBlock na as, WasmBlock nb bs]
+appendHelper a b = WasmBlock Nothing [a, b]
+
 instance Semigroup (WasmInstruction args 'Nothing) where
-    WasmBlock na as <> WasmBlock nb bs
-        | na == nb = WasmBlock na (as <> bs)
-        | otherwise = WasmBlock Nothing [WasmBlock na as, WasmBlock nb bs]
-    a <> b = WasmBlock Nothing [a, b]
+  a <> b = flatternBlocks $ appendHelper a b

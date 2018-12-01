@@ -290,7 +290,7 @@ prettyWasmInstruction (WasmIf predicate a b) =
 prettyWasmInstruction (WasmBlock mName args) =
     parens $
     vsep
-        (("block" <+> pretty (fromMaybe "void" mName)) :
+        (("block" <+> pretty (fromMaybe mempty mName)) :
          map (indent 2 . prettyWasmInstruction) args)
 prettyWasmInstruction (WasmEq a b) =  wasmOperator "eq" a b
 prettyWasmInstruction (WasmLessThanOrEqual a b) =  wasmOperator "le" a b
@@ -307,4 +307,7 @@ prettyWasmInstruction (WasmGreaterThanOrEqualUnsigned a b) =  wasmOperator "ge_u
 prettyWasmInstruction (WasmGreaterThanUnsigned a b) =  wasmOperator "gt_u" a b
 
 instance Semigroup (WasmInstruction args 'Nothing) where
+    WasmBlock na as <> WasmBlock nb bs
+        | na == nb = WasmBlock na (as <> bs)
+        | otherwise = WasmBlock Nothing [WasmBlock na as, WasmBlock nb bs]
     a <> b = WasmBlock Nothing [a, b]
